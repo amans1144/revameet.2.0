@@ -19,7 +19,7 @@ app.get("/", function (req, res) {
   res.sendFile(path.join(__dirname, "build", "index.html"));
 });
 
-app.get("/class", (req, rsp) => {
+app.get("/clas", (req, rsp) => {
   rsp.redirect(`/${uuidv4()}`);
 });
 
