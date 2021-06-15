@@ -1,24 +1,14 @@
 const socket = io("/");
-const chatInputBox = document.getElementById("chat_message");
-const all_messages = document.getElementById("all_messages");
-const main__chat__window = document.getElementById("main__chat__window");
 const videoGrid = document.getElementById("video-grid");
-const myVideo = document.createElement("video");
-myVideo.muted = true;
-
-var peer = new Peer(undefined, {
+const myPeer = new Peer(undefined, {
   path: "/peerjs",
   host: "/",
-  port: "3030",
+  port: "3000",
 });
-
 let myVideoStream;
-
-var getUserMedia =
-  navigator.getUserMedia ||
-  navigator.webkitGetUserMedia ||
-  navigator.mozGetUserMedia;
-
+const myVideo = document.createElement("video");
+myVideo.muted = true;
+const peers = {};
 navigator.mediaDevices
   .getUserMedia({
     video: true,
@@ -27,11 +17,9 @@ navigator.mediaDevices
   .then((stream) => {
     myVideoStream = stream;
     addVideoStream(myVideo, stream);
-
-    peer.on("call", (call) => {
+    myPeer.on("call", (call) => {
       call.answer(stream);
       const video = document.createElement("video");
-
       call.on("stream", (userVideoStream) => {
         addVideoStream(video, userVideoStream);
       });
@@ -40,80 +28,53 @@ navigator.mediaDevices
     socket.on("user-connected", (userId) => {
       connectToNewUser(userId, stream);
     });
-
-    document.addEventListener("keydown", (e) => {
-      if (e.which === 13 && chatInputBox.value != "") {
-        socket.emit("message", chatInputBox.value);
-        chatInputBox.value = "";
+    // input value
+    let text = $("input");
+    // when press enter send message
+    $("html").keydown(function (e) {
+      if (e.which == 13 && text.val().length !== 0) {
+        socket.emit("message", text.val());
+        text.val("");
       }
     });
-
-    socket.on("createMessage", (msg) => {
-      console.log(msg);
-      let li = document.createElement("li");
-      li.innerHTML = msg;
-      all_messages.append(li);
-      main__chat__window.scrollTop = main__chat__window.scrollHeight;
+    socket.on("createMessage", (message) => {
+      $("ul").append(`<li class="message"><b>user</b><br/>${message}</li>`);
+      scrollToBottom();
     });
   });
 
-peer.on("call", function (call) {
-  getUserMedia(
-    { video: true, audio: true },
-    function (stream) {
-      call.answer(stream); // Answer the call with an A/V stream.
-      const video = document.createElement("video");
-      call.on("stream", function (remoteStream) {
-        addVideoStream(video, remoteStream);
-      });
-    },
-    function (err) {
-      console.log("Failed to get local stream", err);
-    }
-  );
+socket.on("user-disconnected", (userId) => {
+  if (peers[userId]) peers[userId].close();
 });
 
-peer.on("open", (id) => {
+myPeer.on("open", (id) => {
   socket.emit("join-room", ROOM_ID, id);
 });
 
-// CHAT
-
-const connectToNewUser = (userId, streams) => {
-  var call = peer.call(userId, streams);
-  console.log(call);
-  var video = document.createElement("video");
+function connectToNewUser(userId, stream) {
+  const call = myPeer.call(userId, stream);
+  const video = document.createElement("video");
   call.on("stream", (userVideoStream) => {
-    console.log(userVideoStream);
     addVideoStream(video, userVideoStream);
   });
-};
-
-const addVideoStream = (videoEl, stream) => {
-  videoEl.srcObject = stream;
-  videoEl.addEventListener("loadedmetadata", () => {
-    videoEl.play();
+  call.on("close", () => {
+    video.remove();
   });
 
-  videoGrid.append(videoEl);
-  let totalUsers = document.getElementsByTagName("video").length;
-  if (totalUsers > 1) {
-    for (let index = 0; index < totalUsers; index++) {
-      document.getElementsByTagName("video")[index].style.width =
-        100 / totalUsers + "%";
-    }
-  }
-};
+  peers[userId] = call;
+}
 
-const playStop = () => {
-  let enabled = myVideoStream.getVideoTracks()[0].enabled;
-  if (enabled) {
-    myVideoStream.getVideoTracks()[0].enabled = false;
-    setPlayVideo();
-  } else {
-    setStopVideo();
-    myVideoStream.getVideoTracks()[0].enabled = true;
-  }
+function addVideoStream(video, stream) {
+  video.srcObject = stream;
+  video.addEventListener("loadedmetadata", () => {
+    video.play();
+  });
+  videoGrid.append(video);
+}
+
+const scrollToBottom = () => {
+  var d = $(".main__chat_window");
+  d.scrollTop(d.prop("scrollHeight"));
 };
 
 const muteUnmute = () => {
@@ -127,25 +88,46 @@ const muteUnmute = () => {
   }
 };
 
-const setPlayVideo = () => {
-  const html = `<i class="unmute fa fa-pause-circle"></i>
-  <span class="unmute">Resume Video</span>`;
-  document.getElementById("playPauseVideo").innerHTML = html;
+const playStop = () => {
+  console.log("object");
+  let enabled = myVideoStream.getVideoTracks()[0].enabled;
+  if (enabled) {
+    myVideoStream.getVideoTracks()[0].enabled = false;
+    setPlayVideo();
+  } else {
+    setStopVideo();
+    myVideoStream.getVideoTracks()[0].enabled = true;
+  }
 };
 
-const setStopVideo = () => {
-  const html = `<i class=" fa fa-video-camera"></i>
-  <span class="">Pause Video</span>`;
-  document.getElementById("playPauseVideo").innerHTML = html;
+const setMuteButton = () => {
+  const html = `
+    <i class="fas fa-microphone"></i>
+    <span>Mute</span>
+  `;
+  document.querySelector(".main__mute_button").innerHTML = html;
 };
 
 const setUnmuteButton = () => {
-  const html = `<i class="unmute fa fa-microphone-slash"></i>
-  <span class="unmute">Unmute</span>`;
-  document.getElementById("muteButton").innerHTML = html;
+  const html = `
+    <i class="unmute fas fa-microphone-slash"></i>
+    <span>Unmute</span>
+  `;
+  document.querySelector(".main__mute_button").innerHTML = html;
 };
-const setMuteButton = () => {
-  const html = `<i class="fa fa-microphone"></i>
-  <span>Mute</span>`;
-  document.getElementById("muteButton").innerHTML = html;
+
+const setStopVideo = () => {
+  const html = `
+    <i class="fas fa-video"></i>
+    <span>Stop Video</span>
+  `;
+  document.querySelector(".main__video_button").innerHTML = html;
+};
+
+const setPlayVideo = () => {
+  const html = `
+  <i class="stop fas fa-video-slash"></i>
+    <span>Play Video</span>
+  `;
+  document.querySelector(".main__video_button").innerHTML = html;
 };
