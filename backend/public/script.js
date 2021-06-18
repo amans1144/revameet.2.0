@@ -3,7 +3,7 @@ const videoGrid = document.getElementById("video-grid");
 const myPeer = new Peer(undefined, {
   path: "/peerjs",
   host: "/",
-  port: "3000",
+  port: "https://revameet.herokuapp.com/",
 });
 let myVideoStream;
 const myVideo = document.createElement("video");
